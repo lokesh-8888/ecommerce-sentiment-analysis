@@ -1,0 +1,7 @@
+{
+  "final_train_loss": 0.1228,
+  "final_eval_loss": 0.26661416888237,
+  "final_accuracy": 0.91276,
+  "total_training_steps": 23,
+  "total_eval_steps": 3
+}

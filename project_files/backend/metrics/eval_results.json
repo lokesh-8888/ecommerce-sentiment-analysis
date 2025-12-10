@@ -1,0 +1,7 @@
+{
+  "accuracy": 0.91276,
+  "f1_score": 0.9132285657449771,
+  "total_samples": 25000,
+  "correct_predictions": 22819,
+  "incorrect_predictions": 2181
+}

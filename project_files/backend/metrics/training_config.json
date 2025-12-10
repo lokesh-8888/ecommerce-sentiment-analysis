@@ -1,0 +1,14 @@
+{
+  "model_name": "distilbert-base-uncased",
+  "dataset": "IMDB",
+  "train_samples": 25000,
+  "test_samples": 25000,
+  "max_length": 256,
+  "batch_size": 16,
+  "epochs": 3,
+  "learning_rate": 2e-05,
+  "warmup_steps": 500,
+  "weight_decay": 0.01,
+  "device": "cuda",
+  "gpu_name": "NVIDIA GeForce RTX 4050 Laptop GPU"
+}
