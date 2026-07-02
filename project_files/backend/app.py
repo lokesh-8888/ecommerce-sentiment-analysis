@@ -19,8 +19,10 @@ supabase_key = os.getenv("VITE_SUPABASE_ANON_KEY")
 supabase: Client = create_client(supabase_url, supabase_key)
 
 MODEL_PATH = "distilbert-base-uncased-finetuned-sst-2-english"
+print(">>> Downloading/loading DistilBERT model from Hugging Face (approx. 267MB)...", flush=True)
 tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
 model = AutoModelForSequenceClassification.from_pretrained(MODEL_PATH)
+print(">>> DistilBERT model loaded successfully!", flush=True)
 
 ASPECT_KEYWORDS = {
     'battery': ['battery', 'charge', 'charging', 'power', 'battery life'],
