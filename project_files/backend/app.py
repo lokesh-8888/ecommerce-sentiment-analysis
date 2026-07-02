@@ -18,7 +18,7 @@ supabase_url = os.getenv("VITE_SUPABASE_URL")
 supabase_key = os.getenv("VITE_SUPABASE_ANON_KEY")
 supabase: Client = create_client(supabase_url, supabase_key)
 
-MODEL_PATH = "./model"
+MODEL_PATH = "distilbert-base-uncased-finetuned-sst-2-english"
 tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
 model = AutoModelForSequenceClassification.from_pretrained(MODEL_PATH)
 
