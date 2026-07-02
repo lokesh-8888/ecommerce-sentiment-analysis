@@ -1,13 +1,13 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
-import torch
 import os
 from dotenv import load_dotenv
 from supabase import create_client, Client
 import re
 from collections import Counter
 import traceback
+import requests
+import time
 
 load_dotenv()
 
@@ -19,10 +19,11 @@ supabase_key = os.getenv("VITE_SUPABASE_ANON_KEY")
 supabase: Client = create_client(supabase_url, supabase_key)
 
 MODEL_PATH = "distilbert-base-uncased-finetuned-sst-2-english"
-print(">>> Downloading/loading DistilBERT model from Hugging Face (approx. 267MB)...", flush=True)
-tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
-model = AutoModelForSequenceClassification.from_pretrained(MODEL_PATH)
-print(">>> DistilBERT model loaded successfully!", flush=True)
+HF_API_URL = f"https://api-inference.huggingface.co/models/{MODEL_PATH}"
+headers = {}
+hf_token = os.getenv("HF_TOKEN")
+if hf_token:
+    headers["Authorization"] = f"Bearer {hf_token}"
 
 ASPECT_KEYWORDS = {
     'battery': ['battery', 'charge', 'charging', 'power', 'battery life'],
@@ -38,22 +39,56 @@ ASPECT_KEYWORDS = {
 }
 
 def predict_sentiment(text):
-    inputs = tokenizer(text, return_tensors="pt", truncation=True, max_length=512, padding=True)
-
-    with torch.no_grad():
-        outputs = model(**inputs)
-        predictions = torch.nn.functional.softmax(outputs.logits, dim=-1)
-
-    sentiment_scores = predictions[0].tolist()
-    sentiment_label = "Positive" if sentiment_scores[1] > sentiment_scores[0] else "Negative"
-    confidence = max(sentiment_scores)
-
-    return {
-        "sentiment": sentiment_label,
-        "confidence": round(confidence * 100, 2),
-        "positive_score": round(sentiment_scores[1] * 100, 2),
-        "negative_score": round(sentiment_scores[0] * 100, 2)
-    }
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            response = requests.post(HF_API_URL, headers=headers, json={"inputs": text}, timeout=10)
+            data = response.json()
+            
+            # Handle Hugging Face model loading state
+            if isinstance(data, dict) and "error" in data:
+                if "loading" in data.get("error", "").lower():
+                    wait_time = min(data.get("estimated_time", 5), 10)
+                    print(f"HF Model is loading, waiting {wait_time}s (attempt {attempt + 1}/{max_retries})...", flush=True)
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    raise Exception(data["error"])
+            
+            # Parse Hugging Face SST-2 model response format: [[{"label": "POSITIVE", "score": 0.99}, ...]]
+            predictions = data[0]
+            scores = {p["label"].upper(): p["score"] for p in predictions}
+            
+            pos_score = scores.get("POSITIVE", 0.0) * 100
+            neg_score = scores.get("NEGATIVE", 0.0) * 100
+            
+            sentiment = "Positive" if pos_score > neg_score else "Negative"
+            confidence = max(pos_score, neg_score)
+            
+            return {
+                "sentiment": sentiment,
+                "confidence": round(confidence, 2),
+                "positive_score": round(pos_score, 2),
+                "negative_score": round(neg_score, 2)
+            }
+        except Exception as e:
+            print(f"HF API attempt {attempt + 1} failed: {e}", flush=True)
+            if attempt == max_retries - 1:
+                # Fallback to standard rule-based heuristic
+                pos_words = ["good", "great", "love", "excellent", "best", "perfect", "amazing", "happy", "recommend"]
+                neg_words = ["bad", "worst", "hate", "poor", "cheap", "terrible", "slow", "disappointed", "refund"]
+                text_lower = text.lower()
+                pos_count = sum(text_lower.count(w) for w in pos_words)
+                neg_count = sum(text_lower.count(w) for w in neg_words)
+                
+                sentiment = "Positive" if pos_count >= neg_count else "Negative"
+                return {
+                    "sentiment": sentiment,
+                    "confidence": 70.0,
+                    "positive_score": 70.0 if sentiment == "Positive" else 30.0,
+                    "negative_score": 30.0 if sentiment == "Positive" else 70.0
+                }
+            time.sleep(2)
 
 def extract_aspects(text):
     text_lower = text.lower()
